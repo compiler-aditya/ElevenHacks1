@@ -1,0 +1,387 @@
+# Source: https://developers.cloudflare.com/durable-objects/api/base/
+
+[Skip to content](https://developers.cloudflare.com/durable-objects/api/base/#_top)
+
+Copy page
+
+# Durable Object Base Class
+
+The `DurableObject` base class is an abstract class which all Durable Objects inherit from. This base class provides a set of optional methods, frequently referred to as handler methods, which can respond to events, for example a `webSocketMessage` when using the [WebSocket Hibernation API](https://developers.cloudflare.com/durable-objects/best-practices/websockets/#durable-objects-hibernation-websocket-api). To provide a concrete example, here is a Durable Object `MyDurableObject` which extends `DurableObject` and implements the fetch handler to return "Hello, World!" to the calling Worker.
+
+- [JavaScript](https://developers.cloudflare.com/durable-objects/api/base/#tab-panel-4624)
+- [TypeScript](https://developers.cloudflare.com/durable-objects/api/base/#tab-panel-4625)
+- [Python](https://developers.cloudflare.com/durable-objects/api/base/#tab-panel-4626)
+
+```
+export class MyDurableObject extends DurableObject {
+
+  constructor(ctx, env) {
+
+    super(ctx, env);
+
+  }
+
+  async fetch(request) {
+
+    return new Response("Hello, World!");
+
+  }
+
+}
+```
+
+```
+export class MyDurableObject extends DurableObject {
+
+  constructor(ctx: DurableObjectState, env: Env) {
+
+    super(ctx, env);
+
+  }
+
+    async fetch(request: Request) {
+
+      return new Response("Hello, World!");
+
+    }
+
+}
+```
+
+```
+from workers import DurableObject, Response
+
+class MyDurableObject(DurableObject):
+
+  def __init__(self, ctx, env):
+
+    super().__init__(ctx, env)
+
+  async def fetch(self, request):
+
+    return Response("Hello, World!")
+```
+
+## Methods
+
+### `fetch`
+
+- `fetch(request  Request )
+`
+: ` Response` \| ` Promise<Response>`\- Takes an HTTP
+[Request ↗](https://developers.cloudflare.com/workers/runtime-apis/request/) and
+returns an HTTP
+[Response ↗](https://developers.cloudflare.com/workers/runtime-apis/response/).
+This method allows the Durable Object to emulate an HTTP server where a Worker
+with a binding to that object is the client. - This method can be `async`.
+  - Durable Objects support [RPC calls](https://developers.cloudflare.com/durable-objects/best-practices/create-durable-object-stubs-and-send-requests/) as of compatibility date [2024-04-03](https://developers.cloudflare.com/workers/configuration/compatibility-flags/#durable-object-stubs-and-service-bindings-support-rpc). RPC methods are preferred over `fetch()` when your application does not follow HTTP request/response flow.
+
+#### Parameters
+
+- `request`` Request` \- the incoming HTTP request object.
+
+#### Return values
+
+- A ` Response` or ` Promise<Response>`.
+
+#### Example
+
+- [JavaScript](https://developers.cloudflare.com/durable-objects/api/base/#tab-panel-4614)
+- [TypeScript](https://developers.cloudflare.com/durable-objects/api/base/#tab-panel-4615)
+
+```
+export class MyDurableObject extends DurableObject {
+
+  async fetch(request) {
+
+    const url = new URL(request.url);
+
+    if (url.pathname === "/hello") {
+
+      return new Response("Hello, World!");
+
+    }
+
+    return new Response("Not found", { status: 404 });
+
+  }
+
+}
+```
+
+```
+export class MyDurableObject extends DurableObject<Env> {
+
+  async fetch(request: Request): Promise<Response> {
+
+    const url = new URL(request.url);
+
+    if (url.pathname === "/hello") {
+
+      return new Response("Hello, World!");
+
+    }
+
+    return new Response("Not found", { status: 404 });
+
+  }
+
+}
+```
+
+### `alarm`
+
+- `alarm(alarmInfo?  AlarmInvocationInfo )
+`
+: ` void` \| ` Promise<void>`  - Called by the system when a scheduled alarm time is reached.
+
+  - The `alarm()` handler has guaranteed at-least-once execution and will be retried upon failure using exponential backoff, starting at two second delays for up to six retries. Retries will be performed if the method fails with an uncaught exception.
+
+  - This method can be `async`.
+
+  - Refer to [Alarms](https://developers.cloudflare.com/durable-objects/api/alarms/) for more information.
+
+#### Parameters
+
+- `alarmInfo`` AlarmInvocationInfo`(optional) - an object containing retry information:
+
+  - `retryCount`` number` \- the number of times this alarm event has been retried.
+  - `isRetry`` boolean` \- `true` if this alarm event is a retry, `false` otherwise.
+
+#### Return values
+
+- None.
+
+#### Example
+
+- [JavaScript](https://developers.cloudflare.com/durable-objects/api/base/#tab-panel-4616)
+- [TypeScript](https://developers.cloudflare.com/durable-objects/api/base/#tab-panel-4617)
+
+```
+export class MyDurableObject extends DurableObject {
+
+  async alarm(alarmInfo) {
+
+    if (alarmInfo?.isRetry) {
+
+      console.log(`Alarm retry attempt ${alarmInfo.retryCount}`);
+
+    }
+
+    await this.processScheduledTask();
+
+  }
+
+}
+```
+
+```
+export class MyDurableObject extends DurableObject<Env> {
+
+  async alarm(alarmInfo?: AlarmInvocationInfo): Promise<void> {
+
+    if (alarmInfo?.isRetry) {
+
+      console.log(`Alarm retry attempt ${alarmInfo.retryCount}`);
+
+    }
+
+    await this.processScheduledTask();
+
+  }
+
+}
+```
+
+### `webSocketMessage`
+
+- `webSocketMessage(ws  WebSocket , message
+string | ArrayBuffer )
+`
+: ` void` \| ` Promise<void>`\- Called by the system
+when an accepted WebSocket receives a message. - This method is not called for
+WebSocket control frames. The system will respond to an incoming [WebSocket\\
+protocol ping ↗](https://www.rfc-editor.org/rfc/rfc6455#section-5.5.2)
+automatically without interrupting hibernation.
+  - This method can be `async`.
+
+#### Parameters
+
+- `ws`` WebSocket` \- the [WebSocket ↗](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) that received the message. Use this reference to send responses or access serialized attachments.
+- `message`` string | ArrayBuffer` \- the message data. Text messages arrive as `string`, binary messages as `ArrayBuffer`.
+
+#### Return values
+
+- None.
+
+#### Example
+
+- [JavaScript](https://developers.cloudflare.com/durable-objects/api/base/#tab-panel-4618)
+- [TypeScript](https://developers.cloudflare.com/durable-objects/api/base/#tab-panel-4619)
+
+```
+export class MyDurableObject extends DurableObject {
+
+  async webSocketMessage(ws, message) {
+
+    if (typeof message === "string") {
+
+      ws.send(`Received: ${message}`);
+
+    } else {
+
+      ws.send(`Received ${message.byteLength} bytes`);
+
+    }
+
+  }
+
+}
+```
+
+```
+export class MyDurableObject extends DurableObject<Env> {
+
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+
+    if (typeof message === "string") {
+
+      ws.send(`Received: ${message}`);
+
+    } else {
+
+      ws.send(`Received ${message.byteLength} bytes`);
+
+    }
+
+  }
+
+}
+```
+
+### `webSocketClose`
+
+- `webSocketClose(ws  WebSocket , code  number ,
+reason  string , wasClean  boolean )
+`
+: ` void` \| ` Promise<void>`\- Called by the system
+when a WebSocket connection is closed. - You **must** call `ws.close(code, reason)` inside this handler to complete the WebSocket close handshake.
+Failing to reciprocate the close will result in `1006` errors on the client,
+representing an abnormal closure per the WebSocket specification.
+  - This method can be `async`.
+
+#### Parameters
+
+- `ws`` WebSocket` \- the [WebSocket ↗](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) that was closed.
+- `code`` number` \- the [WebSocket close code ↗](https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent/code) sent by the peer (e.g., `1000` for normal closure, `1001` for going away).
+- `reason`` string` \- a string indicating why the connection was closed. May be empty.
+- `wasClean`` boolean` \- `true` if the connection closed cleanly with a proper closing handshake, `false` otherwise.
+
+#### Return values
+
+- None.
+
+#### Example
+
+- [JavaScript](https://developers.cloudflare.com/durable-objects/api/base/#tab-panel-4620)
+- [TypeScript](https://developers.cloudflare.com/durable-objects/api/base/#tab-panel-4621)
+
+```
+export class MyDurableObject extends DurableObject {
+
+  async webSocketClose(ws, code, reason, wasClean) {
+
+    // Complete the WebSocket close handshake
+
+    ws.close(code, reason);
+
+    console.log(`WebSocket closed: code=${code}, reason=${reason}`);
+
+  }
+
+}
+```
+
+```
+export class MyDurableObject extends DurableObject<Env> {
+
+  async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
+
+    // Complete the WebSocket close handshake
+
+    ws.close(code, reason);
+
+    console.log(`WebSocket closed: code=${code}, reason=${reason}`);
+
+  }
+
+}
+```
+
+### `webSocketError`
+
+- `webSocketError(ws  WebSocket , error  unknown )
+`
+: ` void` \| ` Promise<void>`\- Called by the system
+when a non-disconnection error occurs on a WebSocket connection. - This method
+can be `async`.
+
+#### Parameters
+
+- `ws`` WebSocket` \- the [WebSocket ↗](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) that encountered an error.
+- `error`` unknown` \- the error that occurred. May be an `Error` object or another type depending on the error source.
+
+#### Return values
+
+- None.
+
+#### Example
+
+- [JavaScript](https://developers.cloudflare.com/durable-objects/api/base/#tab-panel-4622)
+- [TypeScript](https://developers.cloudflare.com/durable-objects/api/base/#tab-panel-4623)
+
+```
+export class MyDurableObject extends DurableObject {
+
+  async webSocketError(ws, error) {
+
+    const message = error instanceof Error ? error.message : String(error);
+
+    console.error(`WebSocket error: ${message}`);
+
+  }
+
+}
+```
+
+```
+export class MyDurableObject extends DurableObject<Env> {
+
+  async webSocketError(ws: WebSocket, error: unknown) {
+
+    const message = error instanceof Error ? error.message : String(error);
+
+    console.error(`WebSocket error: ${message}`);
+
+  }
+
+}
+```
+
+## Properties
+
+### `ctx`
+
+`ctx` is a readonly property of type [`DurableObjectState`](https://developers.cloudflare.com/durable-objects/api/state/) providing access to storage, WebSocket management, and other instance-specific functionality.
+
+### `env`
+
+`env` contains the environment bindings available to this Durable Object, as defined in your Wrangler configuration.
+
+## Related resources
+
+- [Use WebSockets](https://developers.cloudflare.com/durable-objects/best-practices/websockets/) for WebSocket handler best practices.
+- [Alarms API](https://developers.cloudflare.com/durable-objects/api/alarms/) for scheduling future work.
+- [RPC methods](https://developers.cloudflare.com/durable-objects/best-practices/create-durable-object-stubs-and-send-requests/) for type-safe method calls.
+
+Back to top
