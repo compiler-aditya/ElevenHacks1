@@ -1,0 +1,31 @@
+# Source: https://elevenlabs.io/docs/overview/administration/workspaces/service-accounts
+
+![Service Accounts](https://files.buildwithfern.com/https://elevenlabs.docs.buildwithfern.com/docs/85b1646b900085c39df273c7337c7428e92325cb621da63c2f6c6d76d2119efd/assets/images/product-guides/workspaces/workspace-service-accounts.png)
+
+## Overview
+
+Service Accounts are currently only available for multi-seat customers, and only Workspace admins
+can use this feature. To upgrade, [get in touch with our sales\\
+team](https://elevenlabs.io/contact-sales).
+
+Service Accounts and their respective API keys allow access to workspace resources without relying on an individual’s access to ElevenLabs.
+
+## Service Accounts
+
+A service account acts as a workspace member. When originally created, they do not have access to any resources.
+
+The service account can be granted access to resources by either adding the service account to a group or directly sharing resources with the service account.
+It is recommended to add them to a group so that future users can be added to the same group and have the same permissions.
+
+## Rotating API keys
+
+When creating a new API key to replace one that you are rotating out, make sure to create the API
+key for the same service account and copy the API key permissions from the old API key to ensure
+that no access is lost.
+
+API keys can either be rotated via the UI or via the API.
+
+To rotate API keys on the web, click on your profile icon located in the top right corner of the dashboard, select **Workspace settings**, and then navigate to the **Service Accounts** tab.
+From there, you can create a new API key for the same service account. Once you’ve switched to using the new API key, you can delete the old one from this tab.
+
+To rotate API keys via the API, please see the API reference underneath **Service Accounts** for the relevant endpoints.
