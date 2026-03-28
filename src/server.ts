@@ -154,6 +154,72 @@ app.post("/api/webhook/check-status", async (c) => {
   return c.json(await resp.json());
 });
 
+// ─── Webhook: Browse Any Website ─────────────────────────────────────
+app.post("/api/webhook/browse-website", async (c) => {
+  const body = await c.req.json();
+  const { phone, url, action } = body;
+
+  if (!phone || !url) {
+    return c.json<WebhookResponse>({
+      success: false,
+      message_for_agent: "Website URL bataiye.",
+    }, 400);
+  }
+
+  const stub = getAgentStub(c.env, phone);
+  const resp = await stub.fetch(new Request("https://do/rpc/browseWebsite", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, action }),
+  }));
+
+  return c.json(await resp.json());
+});
+
+// ─── Webhook: Search the Web ─────────────────────────────────────────
+app.post("/api/webhook/search-web", async (c) => {
+  const body = await c.req.json();
+  const { phone, query } = body;
+
+  if (!phone || !query) {
+    return c.json<WebhookResponse>({
+      success: false,
+      message_for_agent: "Kya dhundhna hai bataiye.",
+    }, 400);
+  }
+
+  const stub = getAgentStub(c.env, phone);
+  const resp = await stub.fetch(new Request("https://do/rpc/searchWeb", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  }));
+
+  return c.json(await resp.json());
+});
+
+// ─── Webhook: Click/Interact on Page ─────────────────────────────────
+app.post("/api/webhook/interact-page", async (c) => {
+  const body = await c.req.json();
+  const { phone, action, selector, value } = body;
+
+  if (!phone || !action) {
+    return c.json<WebhookResponse>({
+      success: false,
+      message_for_agent: "Kya karna hai bataiye.",
+    }, 400);
+  }
+
+  const stub = getAgentStub(c.env, phone);
+  const resp = await stub.fetch(new Request("https://do/rpc/interactPage", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, selector, value }),
+  }));
+
+  return c.json(await resp.json());
+});
+
 // ─── Serve Screenshot from R2 ───────────────────────────────────────
 app.get("/api/screenshot/:sessionId", async (c) => {
   const sessionId = c.req.param("sessionId");

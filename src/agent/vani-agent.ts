@@ -488,6 +488,192 @@ export class VaniAgent extends Agent<Env, VaniState> {
     }));
   }
 
+  // ─── RPC: Browse Any Website ────────────────────────────────────────
+  async browseWebsite(params: { url: string; action?: string }): Promise<WebhookResponse> {
+    const { url, action } = params;
+
+    this.setState({
+      ...this.state,
+      currentStep: "browsing",
+      isBrowsing: true,
+      error: null,
+    });
+
+    try {
+      // Launch browser if not already open
+      if (!this.navigator) {
+        this.navigator = new PMKisanNavigator(this.env);
+        await this.navigator.launch();
+      }
+
+      // Navigate to the URL
+      const page = (this.navigator as any).page;
+      if (!page) throw new Error("Browser not ready");
+
+      await page.goto(url, { waitUntil: "networkidle0", timeout: 30000 });
+
+      // Take screenshot
+      const screenshot = await this.navigator.takeScreenshot();
+      const sessionId = this.state.sessionId || crypto.randomUUID();
+      const screenshotUrl = await this.uploadScreenshot(sessionId, screenshot);
+
+      // Extract and summarize page content
+      const pageText = await this.navigator.extractPageText();
+      const summary = await this.translateAndSummarize(pageText);
+
+      this.setState({
+        ...this.state,
+        currentStep: "page_loaded",
+        sessionId,
+        screenshotUrl,
+        isBrowsing: false,
+        lastMessage: summary,
+      });
+
+      return {
+        success: true,
+        message_for_agent: summary,
+        data: { screenshot_url: screenshotUrl, url, session_id: sessionId },
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
+      this.setState({ ...this.state, isBrowsing: false, error: errMsg });
+      return {
+        success: false,
+        message_for_agent: `Website kholne mein dikkat: ${errMsg}`,
+        data: { error: errMsg },
+      };
+    }
+  }
+
+  // ─── RPC: Search the Web ──────────────────────────────────────────
+  async searchWeb(params: { query: string }): Promise<WebhookResponse> {
+    const { query } = params;
+
+    this.setState({
+      ...this.state,
+      currentStep: "searching",
+      isBrowsing: true,
+    });
+
+    try {
+      if (!this.navigator) {
+        this.navigator = new PMKisanNavigator(this.env);
+        await this.navigator.launch();
+      }
+
+      const page = (this.navigator as any).page;
+      if (!page) throw new Error("Browser not ready");
+
+      // Search via Google
+      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=hi`;
+      await page.goto(searchUrl, { waitUntil: "networkidle0", timeout: 30000 });
+
+      const screenshot = await this.navigator.takeScreenshot();
+      const sessionId = this.state.sessionId || crypto.randomUUID();
+      const screenshotUrl = await this.uploadScreenshot(sessionId, screenshot);
+
+      // Extract search results
+      const pageText = await this.navigator.extractPageText();
+      const summary = await this.translateAndSummarize(pageText);
+
+      this.setState({
+        ...this.state,
+        currentStep: "search_results",
+        sessionId,
+        screenshotUrl,
+        isBrowsing: false,
+        lastMessage: summary,
+      });
+
+      return {
+        success: true,
+        message_for_agent: summary,
+        data: { screenshot_url: screenshotUrl, query, session_id: sessionId },
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
+      this.setState({ ...this.state, isBrowsing: false, error: errMsg });
+      return {
+        success: false,
+        message_for_agent: `Search mein dikkat: ${errMsg}`,
+        data: { error: errMsg },
+      };
+    }
+  }
+
+  // ─── RPC: Interact with Current Page ──────────────────────────────
+  async interactPage(params: { action: string; selector?: string; value?: string }): Promise<WebhookResponse> {
+    const { action, selector, value } = params;
+
+    if (!this.navigator) {
+      return { success: false, message_for_agent: "Pehle koi website kholiye." };
+    }
+
+    const page = (this.navigator as any).page;
+    if (!page) {
+      return { success: false, message_for_agent: "Browser ready nahi hai." };
+    }
+
+    this.setState({ ...this.state, isBrowsing: true });
+
+    try {
+      switch (action) {
+        case "click":
+          if (selector) {
+            await page.click(selector);
+            await page.waitForTimeout(1000);
+          }
+          break;
+        case "type":
+          if (selector && value) {
+            await page.type(selector, value, { delay: 30 });
+          }
+          break;
+        case "scroll_down":
+          await page.evaluate(() => window.scrollBy(0, 500));
+          break;
+        case "scroll_up":
+          await page.evaluate(() => window.scrollBy(0, -500));
+          break;
+        case "go_back":
+          await page.goBack({ waitUntil: "networkidle0", timeout: 15000 }).catch(() => {});
+          break;
+        case "refresh":
+          await page.reload({ waitUntil: "networkidle0", timeout: 15000 });
+          break;
+      }
+
+      const screenshot = await this.navigator.takeScreenshot();
+      const sessionId = this.state.sessionId || crypto.randomUUID();
+      const screenshotUrl = await this.uploadScreenshot(sessionId, screenshot);
+
+      const pageText = await this.navigator.extractPageText();
+      const summary = await this.translateAndSummarize(pageText);
+
+      this.setState({
+        ...this.state,
+        screenshotUrl,
+        isBrowsing: false,
+        lastMessage: summary,
+      });
+
+      return {
+        success: true,
+        message_for_agent: summary,
+        data: { screenshot_url: screenshotUrl, action },
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
+      this.setState({ ...this.state, isBrowsing: false, error: errMsg });
+      return {
+        success: false,
+        message_for_agent: `Action mein dikkat: ${errMsg}`,
+        data: { error: errMsg },
+      };
+    }
+  }
+
   // ─── HTTP handler for RPC calls from the Worker ────────────────────
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -520,6 +706,15 @@ export class VaniAgent extends Agent<Env, VaniState> {
             break;
           case "scheduleReminder":
             result = await this.scheduleReminder(body as Parameters<typeof this.scheduleReminder>[0]);
+            break;
+          case "browseWebsite":
+            result = await this.browseWebsite(body as { url: string; action?: string });
+            break;
+          case "searchWeb":
+            result = await this.searchWeb(body as { query: string });
+            break;
+          case "interactPage":
+            result = await this.interactPage(body as { action: string; selector?: string; value?: string });
             break;
           default:
             return Response.json({ success: false, message_for_agent: `Unknown method: ${method}` }, { status: 404 });
