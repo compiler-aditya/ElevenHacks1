@@ -1,0 +1,11 @@
+{
+  "extends": "agents/tsconfig",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "env.d.ts"]
+}

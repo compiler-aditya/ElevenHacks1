@@ -1,0 +1,39 @@
+{
+  "name": "vani",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VANI — Voice Access to the Digital World. Voice-first web proxy for digitally excluded populations.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "deploy": "vite build && wrangler deploy",
+    "types": "wrangler types env.d.ts --include-runtime false",
+    "setup-el": "npx tsx scripts/setup-el-agent.ts",
+    "generate-audio": "npx tsx scripts/generate-audio-assets.ts"
+  },
+  "dependencies": {
+    "agents": "^0.8.7",
+    "@cloudflare/puppeteer": "^0.0.15",
+    "hono": "^4.7.7",
+    "zod": "^4.3.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-decorators": "^7.29.0",
+    "@cloudflare/vite-plugin": "1.30.2",
+    "@cloudflare/workers-types": "^4.20260317.1",
+    "@rolldown/plugin-babel": "^0.2.2",
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.3",
+    "wrangler": "4.78.0",
+    "tsx": "^4.19.0"
+  }
+}
