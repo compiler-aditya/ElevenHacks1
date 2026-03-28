@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAgent } from "agents/react";
+import { Conversation } from "@elevenlabs/client";
 import type { VaniState } from "./types";
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -39,8 +40,9 @@ export function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [status, setStatus] = useState<string>("idle");
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
-  const [elWidget, setElWidget] = useState<any>(null);
+  const conversationRef = useRef<any>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const screenshotRef = useRef<HTMLImageElement>(null);
 
@@ -67,55 +69,8 @@ export function App() {
     }
   }, [agentState.screenshotUrl]);
 
-  // Initialize ElevenLabs widget
-  const initElevenLabs = useCallback(async () => {
-    try {
-      // Get signed URL from our backend
-      const resp = await fetch("/api/el-signed-url");
-      if (!resp.ok) {
-        console.error("Failed to get EL signed URL");
-        return;
-      }
-      const { signed_url } = await resp.json() as { signed_url: string };
-
-      // Initialize the ElevenLabs Conversational AI widget
-      // @ts-ignore - ElevenLabs widget loaded via script
-      if (window.ElevenLabsConvai) {
-        // @ts-ignore
-        const widget = new window.ElevenLabsConvai({
-          signedUrl: signed_url,
-          onConnect: () => {
-            setIsListening(true);
-            addTranscript("agent", "Namaste! Main VANI hoon, aapki digital didi. Aaj main aapki kya madad kar sakti hoon?");
-          },
-          onDisconnect: () => {
-            setIsListening(false);
-            setIsSpeaking(false);
-          },
-          onMessage: (msg: { source: string; message: string }) => {
-            if (msg.source === "user") {
-              addTranscript("user", msg.message);
-            } else if (msg.source === "agent") {
-              addTranscript("agent", msg.message);
-            }
-          },
-          onModeChange: (mode: { mode: string }) => {
-            setIsSpeaking(mode.mode === "speaking");
-            setIsListening(mode.mode === "listening");
-          },
-          onError: (error: Error) => {
-            console.error("EL widget error:", error);
-          },
-        });
-
-        setElWidget(widget);
-      }
-    } catch (err) {
-      console.error("ElevenLabs init failed:", err);
-    }
-  }, []);
-
-  const addTranscript = (role: "user" | "agent", text: string) => {
+  const addTranscript = useCallback((role: "user" | "agent", text: string) => {
+    if (!text.trim()) return;
     setTranscript((prev) => [
       ...prev,
       {
@@ -125,17 +80,82 @@ export function App() {
         timestamp: new Date(),
       },
     ]);
-  };
+  }, []);
+
+  // Start ElevenLabs conversation
+  const startConversation = useCallback(async () => {
+    try {
+      setStatus("connecting");
+
+      // Get signed URL from our backend
+      const resp = await fetch("/api/el-signed-url");
+      if (!resp.ok) {
+        console.error("Failed to get EL signed URL:", resp.status);
+        setStatus("error");
+        return;
+      }
+      const { signed_url } = (await resp.json()) as { signed_url: string };
+
+      // Request mic permission
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Start conversation session using ElevenLabs SDK
+      const conversation = await Conversation.startSession({
+        signedUrl: signed_url,
+        onConnect: () => {
+          console.log("EL conversation connected");
+          setIsListening(true);
+          setStatus("connected");
+        },
+        onDisconnect: (details) => {
+          console.log("EL conversation disconnected:", details);
+          setIsListening(false);
+          setIsSpeaking(false);
+          setStatus("idle");
+          conversationRef.current = null;
+        },
+        onMessage: (message) => {
+          const msg = message as { source?: string; message?: string };
+          if (msg.source === "user" && msg.message) {
+            addTranscript("user", msg.message);
+          } else if (msg.source === "ai" && msg.message) {
+            addTranscript("agent", msg.message);
+          }
+        },
+        onModeChange: (mode) => {
+          setIsSpeaking(mode.mode === "speaking");
+          setIsListening(mode.mode === "listening");
+        },
+        onError: (error) => {
+          console.error("EL conversation error:", error);
+          setStatus("error");
+        },
+      });
+
+      conversationRef.current = conversation;
+    } catch (err) {
+      console.error("Failed to start conversation:", err);
+      setStatus("error");
+      addTranscript("agent", "Mic access nahi mil paya. Kripya microphone permission dein aur dubara try karein.");
+    }
+  }, [addTranscript]);
+
+  // End conversation
+  const endConversation = useCallback(async () => {
+    if (conversationRef.current) {
+      await conversationRef.current.endSession();
+      conversationRef.current = null;
+    }
+    setIsListening(false);
+    setIsSpeaking(false);
+    setStatus("idle");
+  }, []);
 
   const handleMicClick = () => {
-    if (elWidget) {
-      if (isListening) {
-        elWidget.endSession();
-      } else {
-        elWidget.startSession();
-      }
+    if (conversationRef.current) {
+      endConversation();
     } else {
-      initElevenLabs();
+      startConversation();
     }
   };
 
@@ -220,32 +240,41 @@ export function App() {
           <div className="flex justify-center">
             <button
               onClick={handleMicClick}
-              className={`mic-orb ${isListening ? "active" : ""}`}
+              className={`mic-orb ${isListening ? "active" : ""} ${status === "connecting" ? "opacity-50" : ""}`}
+              disabled={status === "connecting"}
               aria-label={isListening ? "Stop listening" : "Start listening"}
             >
-              <svg
-                width="40"
-                height="40"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" x2="12" y1="19" y2="22" />
-              </svg>
+              {status === "connecting" ? (
+                <div className="w-10 h-10 border-3 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg
+                  width="40"
+                  height="40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" x2="12" y1="19" y2="22" />
+                </svg>
+              )}
             </button>
           </div>
 
           <p className="text-center text-xs text-slate-500 mt-3">
-            {isListening
-              ? isSpeaking
-                ? "VANI bol rahi hai..."
-                : "Sun rahi hoon..."
-              : "Shuru karne ke liye mic dabayein"}
+            {status === "connecting"
+              ? "Connecting..."
+              : status === "error"
+                ? "Error — tap to retry"
+                : isListening
+                  ? isSpeaking
+                    ? "VANI bol rahi hai..."
+                    : "Sun rahi hoon..."
+                  : "Shuru karne ke liye mic dabayein"}
           </p>
         </div>
       </div>
