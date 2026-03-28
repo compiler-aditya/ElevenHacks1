@@ -1,74 +1,126 @@
 @import "tailwindcss";
 
-/* VANI custom styles */
+/* ─── VANI Design System Tokens ─────────────────────────────────────── */
 @layer base {
   :root {
+    /* Primary — Indian saffron */
     --vani-primary: #f97316;
     --vani-primary-dark: #ea580c;
+    --vani-primary-light: #fb923c;
+    --vani-primary-glow: rgba(249, 115, 22, 0.25);
+
+    /* Secondary — AI/listening violet */
+    --vani-secondary: #8b5cf6;
+    --vani-secondary-glow: rgba(139, 92, 246, 0.2);
+
+    /* Success — Indian green */
+    --vani-success: #22c55e;
+    --vani-success-soft: rgba(34, 197, 94, 0.15);
+
+    /* Error */
+    --vani-error: #ef4444;
+    --vani-error-soft: rgba(239, 68, 68, 0.15);
+
+    /* Backgrounds — deep navy scale */
+    --vani-bg-deepest: #0a0f1e;
     --vani-bg-dark: #0f172a;
     --vani-bg-card: #1e293b;
-    --vani-text: #f8fafc;
+    --vani-bg-elevated: #253349;
+    --vani-bg-surface: rgba(30, 41, 59, 0.5);
+
+    /* Text — slate scale, never pure white */
+    --vani-text-primary: #f1f5f9;
+    --vani-text-secondary: #cbd5e1;
     --vani-text-muted: #94a3b8;
-    --vani-success: #22c55e;
-    --vani-error: #ef4444;
-    --vani-accent: #8b5cf6;
+    --vani-text-faint: #64748b;
+    --vani-text-ghost: #475569;
+
+    /* Borders */
+    --vani-border: #334155;
+    --vani-border-subtle: rgba(51, 65, 85, 0.5);
+
+    /* Typography */
+    --font-headline: "Plus Jakarta Sans", system-ui, sans-serif;
+    --font-body: "Inter", system-ui, sans-serif;
+    --font-label: "DM Sans", system-ui, sans-serif;
+    --font-mono: "DM Mono", "SF Mono", monospace;
+
+    /* Sizing */
+    --mic-orb-size: 120px;
+    --mic-orb-mobile: 96px;
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
   }
 
   body {
     margin: 0;
     padding: 0;
-    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-family: var(--font-body);
     background: var(--vani-bg-dark);
-    color: var(--vani-text);
+    color: var(--vani-text-primary);
     overflow: hidden;
-    height: 100vh;
+    height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-headline);
   }
 }
 
-/* Pulsing microphone orb */
+/* ─── Mic Orb ───────────────────────────────────────────────────────── */
 @keyframes pulse-ring {
-  0% {
-    transform: scale(1);
-    opacity: 0.6;
-  }
-  50% {
-    transform: scale(1.3);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 0;
-  }
+  0% { transform: scale(1); opacity: 0.5; }
+  70% { transform: scale(1.4); opacity: 0; }
+  100% { transform: scale(1.4); opacity: 0; }
 }
 
 @keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 40px rgba(249, 115, 22, 0.6), 0 0 80px rgba(249, 115, 22, 0.2);
-  }
+  0%, 100% { box-shadow: 0 0 24px var(--vani-primary-glow); }
+  50% { box-shadow: 0 0 48px var(--vani-primary-glow), 0 0 96px rgba(249, 115, 22, 0.1); }
 }
 
 .mic-orb {
   position: relative;
-  width: 120px;
-  height: 120px;
+  width: var(--mic-orb-size);
+  height: var(--mic-orb-size);
   border-radius: 50%;
   background: linear-gradient(135deg, var(--vani-primary), var(--vani-primary-dark));
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: transform 0.2s ease, box-shadow 0.3s ease;
+  border: none;
+  outline: none;
+  flex-shrink: 0;
 }
 
 .mic-orb:hover {
   transform: scale(1.05);
+  box-shadow: 0 0 32px var(--vani-primary-glow);
+}
+
+.mic-orb:active {
+  transform: scale(0.97);
+}
+
+.mic-orb:focus-visible {
+  outline: 2px solid var(--vani-primary-light);
+  outline-offset: 4px;
 }
 
 .mic-orb.active {
-  animation: pulse-glow 2s infinite;
+  animation: pulse-glow 2s ease-in-out infinite;
 }
 
 .mic-orb.active::before,
@@ -79,37 +131,157 @@
   height: 100%;
   border-radius: 50%;
   border: 2px solid var(--vani-primary);
-  animation: pulse-ring 2s infinite;
+  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 .mic-orb.active::after {
-  animation-delay: 0.5s;
+  animation-delay: 0.6s;
 }
 
-/* Waveform animation */
+.mic-orb.listening {
+  background: linear-gradient(135deg, var(--vani-secondary), #7c3aed);
+}
+
+/* Mobile mic orb */
+@media (max-width: 768px) {
+  .mic-orb {
+    width: var(--mic-orb-mobile);
+    height: var(--mic-orb-mobile);
+  }
+}
+
+/* ─── Waveform ──────────────────────────────────────────────────────── */
 @keyframes wave {
-  0%, 100% { height: 8px; }
-  50% { height: 32px; }
+  0%, 100% { height: 6px; }
+  50% { height: 28px; }
+}
+
+@keyframes wave-idle {
+  0%, 100% { height: 4px; }
+  50% { height: 8px; }
 }
 
 .waveform-bar {
-  width: 4px;
-  background: var(--vani-primary);
+  width: 3px;
   border-radius: 2px;
-  animation: wave 1.2s ease-in-out infinite;
+  animation: wave-idle 2s ease-in-out infinite;
+  background: var(--vani-text-ghost);
+  transition: background 0.3s ease;
 }
 
-/* Progress bar */
+.waveform-bar.active {
+  animation: wave 1s ease-in-out infinite;
+  background: var(--vani-primary);
+}
+
+.waveform-bar.speaking {
+  animation: wave 0.8s ease-in-out infinite;
+  background: var(--vani-primary);
+}
+
+.waveform-bar.listening {
+  animation: wave 1.4s ease-in-out infinite;
+  background: var(--vani-secondary);
+  opacity: 0.6;
+}
+
+/* ─── Chat Bubbles ──────────────────────────────────────────────────── */
+@keyframes message-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.chat-bubble {
+  animation: message-in 0.3s ease-out;
+  max-width: 85%;
+  line-height: 1.55;
+}
+
+.chat-bubble-user {
+  background: var(--vani-primary-dark);
+  color: white;
+  border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg);
+}
+
+.chat-bubble-agent {
+  background: var(--vani-bg-elevated);
+  color: var(--vani-text-primary);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) 4px;
+  border: 1px solid var(--vani-border-subtle);
+}
+
+/* ─── Progress Bar ──────────────────────────────────────────────────── */
+.progress-track {
+  height: 3px;
+  background: var(--vani-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
 .progress-fill {
-  transition: width 0.5s ease-out;
+  height: 100%;
+  background: linear-gradient(90deg, var(--vani-primary), var(--vani-primary-light));
+  border-radius: 2px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Screenshot container */
+/* ─── Field Chips ───────────────────────────────────────────────────── */
+.field-chip {
+  font-family: var(--font-label);
+  font-size: 10px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+.field-chip.done {
+  background: var(--vani-success-soft);
+  color: var(--vani-success);
+}
+
+.field-chip.current {
+  background: rgba(249, 115, 22, 0.15);
+  color: var(--vani-primary);
+  font-weight: 600;
+}
+
+.field-chip.pending {
+  background: var(--vani-bg-card);
+  color: var(--vani-text-ghost);
+}
+
+/* ─── Quick Action Chips ────────────────────────────────────────────── */
+.quick-chip {
+  font-family: var(--font-label);
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 100px;
+  background: var(--vani-bg-card);
+  color: var(--vani-text-secondary);
+  border: 1px solid var(--vani-border);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quick-chip:hover {
+  background: var(--vani-bg-elevated);
+  border-color: var(--vani-text-ghost);
+  color: var(--vani-text-primary);
+}
+
+/* ─── Screenshot Container ──────────────────────────────────────────── */
 .screenshot-container {
   background: white;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 40px rgba(0, 0, 0, 0.4);
+  position: relative;
 }
 
 .screenshot-container img {
@@ -118,32 +290,162 @@
   display: block;
 }
 
-/* Scrollbar styling */
+.screenshot-live-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--vani-success);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ─── Success Overlay ───────────────────────────────────────────────── */
+@keyframes confetti-fall {
+  0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(60px) rotate(360deg); opacity: 0; }
+}
+
+@keyframes success-scale {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.success-overlay {
+  animation: success-scale 0.5s ease-out;
+}
+
+/* ─── Bottom Sheet (Mobile) ─────────────────────────────────────────── */
+.bottom-sheet {
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-top: 1px solid var(--vani-border-subtle);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+.bottom-sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--vani-text-ghost);
+  margin: 8px auto 12px;
+}
+
+/* ─── Feature Cards (Welcome State) ─────────────────────────────────── */
+.feature-card {
+  background: var(--vani-bg-surface);
+  border: 1px solid var(--vani-border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: all 0.2s ease;
+}
+
+.feature-card:hover {
+  background: var(--vani-bg-elevated);
+  border-color: var(--vani-border);
+}
+
+.feature-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(249, 115, 22, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ─── Browser Chrome ────────────────────────────────────────────────── */
+.browser-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+/* ─── Status Dot ────────────────────────────────────────────────────── */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.connected { background: var(--vani-success); }
+.status-dot.disconnected { background: var(--vani-error); }
+.status-dot.loading { background: var(--vani-primary); animation: pulse-glow 1.5s infinite; }
+
+/* ─── Scrollbar ─────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--vani-bg-dark);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--vani-text-muted);
+  background: var(--vani-border);
   border-radius: 3px;
 }
 
-/* Transcript messages */
-.transcript-message {
-  animation: fadeIn 0.3s ease-out;
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vani-text-ghost);
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* ─── Onboarding ────────────────────────────────────────────────────── */
+@keyframes float-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.onboarding-enter {
+  animation: float-up 0.6s ease-out;
+}
+
+.onboarding-enter-delayed {
+  animation: float-up 0.6s ease-out 0.15s both;
+}
+
+.onboarding-enter-delayed-2 {
+  animation: float-up 0.6s ease-out 0.3s both;
+}
+
+/* ─── Language Pill ─────────────────────────────────────────────────── */
+.lang-pill {
+  font-family: var(--font-label);
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 100px;
+  border: 1px solid var(--vani-border);
+  background: var(--vani-bg-card);
+  color: var(--vani-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lang-pill.active {
+  border-color: var(--vani-primary);
+  color: var(--vani-primary);
+  background: rgba(249, 115, 22, 0.1);
+}
+
+/* ─── Responsive Breakpoints ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .desktop-only { display: none !important; }
+}
+
+@media (min-width: 769px) {
+  .mobile-only { display: none !important; }
 }
