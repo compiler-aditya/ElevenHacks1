@@ -20,6 +20,7 @@ import {
 export class VaniAgent extends Agent<Env, VaniState> {
   // Browser navigator instance (lazy-initialized)
   private navigator: PMKisanNavigator | null = null;
+  private tablesCreated = false;
 
   // ─── Initial State ─────────────────────────────────────────────────
   initialState: VaniState = {
@@ -34,59 +35,66 @@ export class VaniAgent extends Agent<Env, VaniState> {
     error: null,
   };
 
-  // ─── Lifecycle: Create SQLite Tables ───────────────────────────────
+  // ─── Ensure SQLite Tables Exist ────────────────────────────────────
+  private ensureTables() {
+    if (this.tablesCreated) return;
+    const sql = this.ctx.storage.sql;
+
+    sql.exec(`CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      phone_hash TEXT UNIQUE NOT NULL,
+      name TEXT,
+      language TEXT DEFAULT 'hi',
+      aadhaar_masked TEXT,
+      state TEXT,
+      district TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )`);
+
+    sql.exec(`CREATE TABLE IF NOT EXISTS saved_fields (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      form_type TEXT NOT NULL,
+      field_name TEXT NOT NULL,
+      field_value_encrypted TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      UNIQUE(user_id, form_type, field_name)
+    )`);
+
+    sql.exec(`CREATE TABLE IF NOT EXISTS interactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      session_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      details TEXT DEFAULT '{}',
+      timestamp TEXT DEFAULT (datetime('now'))
+    )`);
+
+    sql.exec(`CREATE TABLE IF NOT EXISTS scheduled_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      trigger_at TEXT NOT NULL,
+      payload TEXT DEFAULT '{}',
+      status TEXT DEFAULT 'pending',
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`);
+
+    this.tablesCreated = true;
+  }
+
+  // ─── Lifecycle ─────────────────────────────────────────────────────
   onStart() {
-    this.sql.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        phone_hash TEXT UNIQUE NOT NULL,
-        name TEXT,
-        language TEXT DEFAULT 'hi',
-        aadhaar_masked TEXT,
-        state TEXT,
-        district TEXT,
-        created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now'))
-      );
-
-      CREATE TABLE IF NOT EXISTS saved_fields (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        form_type TEXT NOT NULL,
-        field_name TEXT NOT NULL,
-        field_value_encrypted TEXT NOT NULL,
-        created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (user_id) REFERENCES users(id),
-        UNIQUE(user_id, form_type, field_name)
-      );
-
-      CREATE TABLE IF NOT EXISTS interactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        session_id TEXT NOT NULL,
-        action TEXT NOT NULL,
-        details TEXT DEFAULT '{}',
-        timestamp TEXT DEFAULT (datetime('now'))
-      );
-
-      CREATE TABLE IF NOT EXISTS scheduled_events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        event_type TEXT NOT NULL,
-        trigger_at TEXT NOT NULL,
-        payload TEXT DEFAULT '{}',
-        status TEXT DEFAULT 'pending',
-        created_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (user_id) REFERENCES users(id)
-      );
-    `);
+    this.ensureTables();
   }
 
   // ─── WebSocket: Notify frontend of state changes ───────────────────
-  onStateUpdate(state: VaniState, _source: Connection | "server") {
+  onStateChanged(state: VaniState, _source: Connection | "server") {
     // State is auto-synced to connected clients via the agents SDK
-    // Additional processing can be done here if needed
   }
 
   // ─── RPC: Identify User ───────────────────────────────────────────
@@ -95,7 +103,7 @@ export class VaniAgent extends Agent<Env, VaniState> {
     const phoneHash = await this.hashPhone(phone);
 
     // Upsert user
-    const existing = this.sql.exec(
+    const existing = this.ctx.storage.sql.exec(
       `SELECT * FROM users WHERE phone_hash = ?`,
       phoneHash
     ).toArray();
@@ -109,21 +117,21 @@ export class VaniAgent extends Agent<Env, VaniState> {
 
       // Update name/language if provided
       if (name || language) {
-        this.sql.exec(
+        this.ctx.storage.sql.exec(
           `UPDATE users SET name = COALESCE(?, name), language = COALESCE(?, language), updated_at = datetime('now') WHERE id = ?`,
           name ?? null, language ?? null, userId
         );
       }
     } else {
-      this.sql.exec(
+      this.ctx.storage.sql.exec(
         `INSERT INTO users (phone_hash, name, language) VALUES (?, ?, ?)`,
         phoneHash, name ?? null, language ?? "hi"
       );
-      userId = Number(this.sql.exec(`SELECT last_insert_rowid() as id`).toArray()[0].id);
+      userId = Number(this.ctx.storage.sql.exec(`SELECT last_insert_rowid() as id`).toArray()[0].id);
     }
 
     // Get saved fields for this user
-    const savedFields = this.sql.exec(
+    const savedFields = this.ctx.storage.sql.exec(
       `SELECT field_name, field_value_encrypted FROM saved_fields WHERE user_id = ? AND form_type = 'pm-kisan'`,
       userId
     ).toArray();
@@ -139,7 +147,7 @@ export class VaniAgent extends Agent<Env, VaniState> {
     // Log interaction
     this.logInteraction(userId, "identify", { isReturning, savedFieldCount: savedFields.length });
 
-    const user = this.sql.exec(`SELECT * FROM users WHERE id = ?`, userId).toArray()[0];
+    const user = this.ctx.storage.sql.exec(`SELECT * FROM users WHERE id = ?`, userId).toArray()[0];
 
     if (isReturning && user.name) {
       return {
@@ -455,7 +463,7 @@ export class VaniAgent extends Agent<Env, VaniState> {
       };
     }
 
-    this.sql.exec(
+    this.ctx.storage.sql.exec(
       `INSERT INTO scheduled_events (user_id, event_type, trigger_at, payload) VALUES (?, ?, ?, ?)`,
       userId, params.type, params.triggerAt, JSON.stringify(params.payload)
     );
@@ -486,24 +494,45 @@ export class VaniAgent extends Agent<Env, VaniState> {
 
     // Handle RPC-style calls from the Worker
     if (url.pathname.startsWith("/rpc/")) {
-      const method = url.pathname.replace("/rpc/", "");
-      const body = await request.json() as Record<string, unknown>;
+      try {
+        // Ensure tables exist before any RPC call
+        this.ensureTables();
 
-      switch (method) {
-        case "identifyUser":
-          return Response.json(await this.identifyUser(body as Parameters<typeof this.identifyUser>[0]));
-        case "startFormNavigation":
-          return Response.json(await this.startFormNavigation(body as Parameters<typeof this.startFormNavigation>[0]));
-        case "fillField":
-          return Response.json(await this.fillField(body as Parameters<typeof this.fillField>[0]));
-        case "readScreen":
-          return Response.json(await this.readScreen(body as Parameters<typeof this.readScreen>[0]));
-        case "checkStatus":
-          return Response.json(await this.checkStatus(body as Parameters<typeof this.checkStatus>[0]));
-        case "scheduleReminder":
-          return Response.json(await this.scheduleReminder(body as Parameters<typeof this.scheduleReminder>[0]));
-        default:
-          return Response.json({ error: `Unknown method: ${method}` }, { status: 404 });
+        const method = url.pathname.replace("/rpc/", "");
+        const body = await request.json() as Record<string, unknown>;
+
+        let result: WebhookResponse;
+        switch (method) {
+          case "identifyUser":
+            result = await this.identifyUser(body as Parameters<typeof this.identifyUser>[0]);
+            break;
+          case "startFormNavigation":
+            result = await this.startFormNavigation(body as Parameters<typeof this.startFormNavigation>[0]);
+            break;
+          case "fillField":
+            result = await this.fillField(body as Parameters<typeof this.fillField>[0]);
+            break;
+          case "readScreen":
+            result = await this.readScreen(body as Parameters<typeof this.readScreen>[0]);
+            break;
+          case "checkStatus":
+            result = await this.checkStatus(body as Parameters<typeof this.checkStatus>[0]);
+            break;
+          case "scheduleReminder":
+            result = await this.scheduleReminder(body as Parameters<typeof this.scheduleReminder>[0]);
+            break;
+          default:
+            return Response.json({ success: false, message_for_agent: `Unknown method: ${method}` }, { status: 404 });
+        }
+        return Response.json(result);
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        console.error(`RPC error: ${errMsg}`, error);
+        return Response.json({
+          success: false,
+          message_for_agent: "Kuch gadbad ho gayi. Ek minute, main dubara try karti hoon.",
+          data: { error: errMsg },
+        }, { status: 500 });
       }
     }
 
@@ -522,7 +551,7 @@ export class VaniAgent extends Agent<Env, VaniState> {
 
   private async getCurrentUserId(): Promise<number | null> {
     if (!this.state.userKey) return null;
-    const rows = this.sql.exec(
+    const rows = this.ctx.storage.sql.exec(
       `SELECT id FROM users WHERE phone_hash = ?`,
       this.state.userKey
     ).toArray();
@@ -530,7 +559,7 @@ export class VaniAgent extends Agent<Env, VaniState> {
   }
 
   private logInteraction(userId: number, action: string, details: Record<string, unknown>) {
-    this.sql.exec(
+    this.ctx.storage.sql.exec(
       `INSERT INTO interactions (user_id, session_id, action, details) VALUES (?, ?, ?, ?)`,
       userId,
       this.state.sessionId || "pre-session",
@@ -544,7 +573,7 @@ export class VaniAgent extends Agent<Env, VaniState> {
     if (!userId) return;
 
     // For demo, we store plain text. In production, encrypt with AES-256.
-    this.sql.exec(
+    this.ctx.storage.sql.exec(
       `INSERT OR REPLACE INTO saved_fields (user_id, form_type, field_name, field_value_encrypted, updated_at)
        VALUES (?, 'pm-kisan', ?, ?, datetime('now'))`,
       userId, fieldName, value
